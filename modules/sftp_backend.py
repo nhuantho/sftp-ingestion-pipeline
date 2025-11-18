@@ -1,7 +1,10 @@
-from modules.storage_backends import StorageBackend
-from airflow.providers.sftp.hooks.sftp import SFTPHook
 import os
 from typing import List
+
+from airflow.providers.sftp.hooks.sftp import SFTPHook
+
+from modules.storage_backends import StorageBackend
+
 
 class SFTPBackend(StorageBackend):
     def __init__(self, conn_id: str, chunk_size: int = 1024 * 1024 * 10):

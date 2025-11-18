@@ -276,7 +276,6 @@ sftp-ingestion-pipeline/
 │   │   ├── external-requirements.txt   # Libs are not providers of airflow
 │   │   └── internal-requirements.txt   # Libs are providers of airflow, ensure compatiable with airflow
 │   ├── Dockerfile                      # Airflow image and Python environment
-│   ├── docker-compose.yml              # Airflow services (Scheduler, Worker, ApiServer, DagProcessor)
 │   └── Taskfile.yml                    # Manage building image
 │
 ├── dags/
@@ -289,9 +288,10 @@ sftp-ingestion-pipeline/
 │
 ├── tests/
 │   ├── storage_backends_test.py        # Mock storage (for SFTP/S3) server for testing
-    ├── sftp_backend_test.py            # Mock SFTP server for testing
+│   ├── sftp_backend_test.py            # Mock SFTP server for testing
 │   └── sync_manager_test.py            # Unit tests for sync logic
 │
+├── docker-compose.yml                  # Airflow services (Scheduler, Worker, ApiServer, DagProcessor)
 ├── .gitignore
 └── README.md                           # Project overview and instructions
 ```

@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import MagicMock
-from modules.sync_manager import SyncManager
+
 from modules.sftp_backend import SFTPBackend
+from modules.sync_manager import SyncManager
+
 
 class TestSyncManager(unittest.TestCase):
     def setUp(self):

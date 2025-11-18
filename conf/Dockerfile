@@ -13,8 +13,6 @@ RUN apt-get update \
 USER ${AIRFLOW_UID}
 RUN python -m pip install --upgrade pip
 COPY ./dependencies /tmp/
-COPY ../dags /opt/airflow/dags/dags
-COPY ../modules /opt/airflow/dags/modules
 
 # Download the constraints file
 RUN curl -o /tmp/constraints.txt https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt
