@@ -1,0 +1,3 @@
+# External requirements consist of the custom packages that could be incompatible with Airflow
+paramiko==3.5.1
+pytest==9.0.1
