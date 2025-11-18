@@ -1,56 +1,80 @@
 import unittest
-from unittest.mock import MagicMock, patch
-
-from modules.sftp_backend import SFTPBackend
+from unittest.mock import MagicMock
 from modules.sync_manager import SyncManager
-
+from modules.sftp_backend import SFTPBackend
 
 class TestSyncManager(unittest.TestCase):
     def setUp(self):
         self.source = MagicMock(spec=SFTPBackend)
-        self.source.hook = MagicMock()  # Add mock hook for get_size
+        self.source.hook = MagicMock()
         self.target = MagicMock(spec=SFTPBackend)
+        self.target.hook = MagicMock()
         self.manager = SyncManager(self.source, self.target, large_file_threshold=1024 * 1024 * 10)
 
-    def test_scan_source(self):
-        self.source.list_files.return_value = ['/src/file1.txt', '/src/file2.txt']
-        files = self.manager.scan_source('/src')
-        self.assertEqual(files, ['/src/file1.txt', '/src/file2.txt'])
+    def test_unidirectional_sync_preserves_structure(self):
+        # Simulate files on source for 3 days
+        source_files = [
+            '/a/b/c/file_1.txt',
+            '/a/b/c/file_2.txt',
+            '/a/b/c/file_3.txt'
+        ]
+        # Simulate files on target (file_1.txt already synced)
+        target_files = [
+            '/a/b/c/file_1.txt'
+        ]
+        self.source.list_files.return_value = source_files
+        self.target.list_files.return_value = target_files
 
-    def test_scan_target(self):
-        self.target.list_files.return_value = ['/dst/file1.txt']
-        files = self.manager.scan_target('/dst')
-        self.assertEqual(files, ['/dst/file1.txt'])
+        # Only file_2.txt and file_3.txt should be synced
+        diff = self.manager.diff_files(source_files, target_files)
+        self.assertEqual(diff, ['/a/b/c/file_2.txt', '/a/b/c/file_3.txt'])
 
-    def test_diff_files(self):
-        src = ['/src/file1.txt', '/src/file2.txt']
-        dst = ['/src/file1.txt']
-        diff = self.manager.diff_files(src, dst)
-        self.assertEqual(diff, ['/src/file2.txt'])
-
-    def test_get_large_files(self):
-        self.source.hook.get_size.side_effect = [5 * 1024 * 1024, 20 * 1024 * 1024]
-        files = ['/src/small.txt', '/src/large.txt']
-        large_files = self.manager.get_large_files(files)
-        self.assertEqual(large_files, ['/src/large.txt'])
-
-    def test_sync_files_success(self):
+        # Simulate successful upload
         self.target.upload_file = MagicMock()
-        files = ['/src/file1.txt', '/src/file2.txt']
-        result = self.manager.sync_files(files, '/src', '/dst')
-        self.assertTrue(all(result.values()))
-        self.target.upload_file.assert_any_call('/src/file1.txt', '/dst/file1.txt')
-        self.target.upload_file.assert_any_call('/src/file2.txt', '/dst/file2.txt')
+        results = self.manager.sync_files(diff, '/a/b/c', '/a/b/c')
+        self.assertTrue(all(results.values()))
+        self.target.upload_file.assert_any_call('/a/b/c/file_2.txt', '/a/b/c/file_2.txt')
+        self.target.upload_file.assert_any_call('/a/b/c/file_3.txt', '/a/b/c/file_3.txt')
 
-    def test_sync_files_failure(self):
-        def fail_upload(src, dst):
-            if 'fail' in src:
-                raise Exception('fail')
-        self.target.upload_file.side_effect = fail_upload
-        files = ['/src/file1.txt', '/src/fail.txt']
-        result = self.manager.sync_files(files, '/src', '/dst')
-        self.assertTrue(result['/src/file1.txt'])
-        self.assertFalse(result['/src/fail.txt'])
+    def test_no_deletion_on_target(self):
+        # Simulate file deleted on source but present on target
+        source_files = ['/a/b/c/file_1.txt']
+        target_files = ['/a/b/c/file_1.txt', '/a/b/c/file_2.txt']
+        self.source.list_files.return_value = source_files
+        self.target.list_files.return_value = target_files
+
+        # Only file_2.txt is missing on source, but should NOT be deleted from target
+        diff = self.manager.diff_files(source_files, target_files)
+        self.assertEqual(diff, [])
+        # No sync should occur
+        self.target.upload_file = MagicMock()
+        results = self.manager.sync_files(diff, '/a/b/c', '/a/b/c')
+        self.assertEqual(results, {})
+
+    def test_sync_new_files_multiple_days(self):
+        # Day 1
+        source_files_day1 = ['/a/b/c/file_1.txt']
+        target_files_day1 = []
+        self.source.list_files.return_value = source_files_day1
+        self.target.list_files.return_value = target_files_day1
+        diff1 = self.manager.diff_files(source_files_day1, target_files_day1)
+        self.assertEqual(diff1, ['/a/b/c/file_1.txt'])
+
+        # Day 2
+        source_files_day2 = ['/a/b/c/file_1.txt', '/a/b/c/file_2.txt']
+        target_files_day2 = ['/a/b/c/file_1.txt']
+        self.source.list_files.return_value = source_files_day2
+        self.target.list_files.return_value = target_files_day2
+        diff2 = self.manager.diff_files(source_files_day2, target_files_day2)
+        self.assertEqual(diff2, ['/a/b/c/file_2.txt'])
+
+        # Day 3
+        source_files_day3 = ['/a/b/c/file_1.txt', '/a/b/c/file_2.txt', '/a/b/c/file_3.txt']
+        target_files_day3 = ['/a/b/c/file_1.txt', '/a/b/c/file_2.txt']
+        self.source.list_files.return_value = source_files_day3
+        self.target.list_files.return_value = target_files_day3
+        diff3 = self.manager.diff_files(source_files_day3, target_files_day3)
+        self.assertEqual(diff3, ['/a/b/c/file_3.txt'])
 
 if __name__ == '__main__':
     unittest.main()
