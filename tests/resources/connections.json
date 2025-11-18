@@ -1,0 +1,9 @@
+{
+  "test_sftp_conn_id": {
+    "conn_type": "sftp",
+    "login": "testuser",
+    "password": "testpass",
+    "host": "localhost",
+    "port": "22"
+  }
+}
