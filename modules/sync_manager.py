@@ -1,8 +1,7 @@
 import logging
 import os
-from typing import (
-    Dict, List, Tuple,
-)
+import tempfile
+from typing import List
 
 from modules.sftp_backend import SFTPBackend
 
@@ -20,8 +19,8 @@ class SyncManager:
     def scan_target(self, path: str) -> List[str]:
         return self.target.list_files(path)
 
+    # Only get new files in the source
     def diff_files(self, source_files: List[str], target_files: List[str]) -> List[str]:
-        # Only new files in source
         return [f for f in source_files if f not in target_files]
 
     def get_large_files(self, files: List[str]) -> List[str]:
@@ -35,16 +34,22 @@ class SyncManager:
                 self.logger.warning(f"Could not get size for {f}")
         return large_files
 
-    def sync_files(self, files: List[str], source_root: str, target_root: str) -> Dict[str, bool]:
+    def sync_files(self, files: List[str], source_root: str, target_root: str):
         results = {}
         for f in files:
-            rel_path = os.path.relpath(f, source_root)
+            rel_path = os.path.relpath(f, source_root) if source_root != "/" else f.lstrip("/")
             target_path = os.path.join(target_root, rel_path)
+
             try:
-                self.target.upload_file(f, target_path)
+                with tempfile.NamedTemporaryFile(delete=True) as tmp:
+                    tmp_path = tmp.name
+
+                    self.source.download_file(f, tmp_path)
+                    self.target.upload_file(tmp_path, target_path)
+
                 results[f] = True
-                self.logger.info(f"Synced {f} to {target_path}")
             except Exception as e:
                 results[f] = False
-                self.logger.error(f"Failed to sync {f}: {e}")
+                print(f"[ERR] Failed to sync {f}: {e}")
+
         return results

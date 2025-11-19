@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from modules.sftp_backend import SFTPBackend
 from modules.sync_manager import SyncManager
@@ -13,30 +13,53 @@ class TestSyncManager(unittest.TestCase):
         self.target.hook = MagicMock()
         self.manager = SyncManager(self.source, self.target, large_file_threshold=1024 * 1024 * 10)
 
-    def test_unidirectional_sync_preserves_structure(self):
-        # Simulate files on source for 3 days
+    @patch("tempfile.NamedTemporaryFile")
+    def test_unidirectional_sync_preserves_structure(self, mock_tmp):
+        # Fake temp file
+        mock_tmp_file = MagicMock()
+        mock_tmp_file.name = "/tmp/fake_tmp"
+        mock_tmp.return_value.__enter__.return_value = mock_tmp_file
+
+        # Simulate file list on source and target
         source_files = [
-            '/a/b/c/file_1.txt',
-            '/a/b/c/file_2.txt',
-            '/a/b/c/file_3.txt'
+            "/a/b/c/file_1.txt",
+            "/a/b/c/file_2.txt",
+            "/a/b/c/file_3.txt",
         ]
-        # Simulate files on target (file_1.txt already synced)
-        target_files = [
-            '/a/b/c/file_1.txt'
-        ]
+        target_files = ["/a/b/c/file_1.txt"]
+
         self.source.list_files.return_value = source_files
         self.target.list_files.return_value = target_files
 
-        # Only file_2.txt and file_3.txt should be synced
+        # Check diff
         diff = self.manager.diff_files(source_files, target_files)
-        self.assertEqual(diff, ['/a/b/c/file_2.txt', '/a/b/c/file_3.txt'])
+        self.assertEqual(diff, [
+            "/a/b/c/file_2.txt",
+            "/a/b/c/file_3.txt"
+        ])
 
-        # Simulate successful upload
+        # Mock download/upload
+        self.source.download_file = MagicMock()
         self.target.upload_file = MagicMock()
-        results = self.manager.sync_files(diff, '/a/b/c', '/a/b/c')
+
+        results = self.manager.sync_files(diff, "/a/b/c", "/a/b/c")
+
+        # Ensure all synced OK
         self.assertTrue(all(results.values()))
-        self.target.upload_file.assert_any_call('/a/b/c/file_2.txt', '/a/b/c/file_2.txt')
-        self.target.upload_file.assert_any_call('/a/b/c/file_3.txt', '/a/b/c/file_3.txt')
+
+        # Check upload paths — use tmp file + correct target path
+        self.target.upload_file.assert_any_call(
+            "/tmp/fake_tmp",
+            "/a/b/c/file_2.txt"
+        )
+        self.target.upload_file.assert_any_call(
+            "/tmp/fake_tmp",
+            "/a/b/c/file_3.txt"
+        )
+
+        # Ensure we downloaded the correct files
+        self.source.download_file.assert_any_call("/a/b/c/file_2.txt", "/tmp/fake_tmp")
+        self.source.download_file.assert_any_call("/a/b/c/file_3.txt", "/tmp/fake_tmp")
 
     def test_no_deletion_on_target(self):
         # Simulate file deleted on source but present on target
