@@ -1,3 +1,5 @@
-### Technical Design Document: [Link documents](./TECHNICAL_DESIGN_DOCUMENT.md)
+### Guideline And Result: [Link documents](docs/GUIDELINE_AND_RESULT.md)
 
-### Build Test plan: [Link documents](./BUILD_TEST_PLAN.md) 
+### Technical Design Document: [Link documents](docs/TECHNICAL_DESIGN_DOCUMENT.md)
+
+### Build Test plan: [Link documents](docs/BUILD_TEST_PLAN.md) 
