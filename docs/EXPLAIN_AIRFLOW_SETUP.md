@@ -6,7 +6,29 @@
 *   **Separate Dag processing architecture ([Link documents](https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/overview.html#separate-dag-processing-architecture))**
 *   ![alt text](./images/airflow_architecture.png)
 
-**2\. Components**
+**2\. Build image**
+-------------------
+* I defined tasks at `conf/Taskfile.yml`, it helps to build images easily
+
+| Component / Step                                                                 | Purpose                     | Explanation                                                                                                                                      |
+| -------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **FROM apache/airflow:3.1.3-python3.12**                                         | Base image                  | Uses official Airflow 3.1.3 with Python 3.12 as starting point                                                                                   |
+| **ARG AIRFLOW_VERSION, PYTHON_VERSION, AIRFLOW_UID**                             | Build arguments             | Allow customization of Airflow version, Python version, and container user ID                                                                    |
+| **USER 0**                                                                       | Switch to root              | Needed to install system packages                                                                                                                |
+| **RUN apt-get update && apt-get install -y gcc heimdal-dev**                     | Install system dependencies | Compiler and Kerberos dev libraries required for some Python packages                                                                            |
+| **USER ${AIRFLOW_UID}**                                                          | Switch back to Airflow user | Ensures proper file permissions in container                                                                                                     |
+| **RUN python -m pip install --upgrade pip**                                      | Upgrade pip                 | Ensures latest pip for package installation                                                                                                      |
+| **COPY ./dependencies /tmp/**                                                    | Copy dependency files       | Internal and external Python package lists for installation                                                                                      |
+| **ENV / vars (AIRFLOW_VERSION, PYTHON_VERSION, AIRFLOW_UID, IMAGE, BUILD_ARGS)** | Environment variables       | Define Airflow version, Python version, user ID, Docker image tag, and build arguments                                                           |
+| **External requirements (paramiko, pytest, pytest-mock)**                        | Install additional packages | Packages needed for SFTP and testing                                                                                                             |
+| **Download constraints file**                                                    | Lock dependencies           | Uses official Airflow constraints for Python version to ensure compatibility                                                                     |
+| **RUN pip install -r internal & external requirements -c constraints**           | Install Python packages     | Internal requirements supported by Airflow (e.g., `apache-airflow-providers-sftp`) and external packages with constraint file to avoid conflicts |
+| **tasks: build**                                                                 | Build image                 | Runs `docker build` with pull, progress, and tag options                                                                                         |
+| **tasks: push**                                                                  | Push image                  | Uploads image to registry (`ghcr.io/nhuantho/docker/airflow`)                                                                                    |
+| **tasks: publish**                                                               | Build + push                | Combines build and push steps                                                                                                                    |
+| **tasks: run**                                                                   | Run container               | Starts container interactively for testing                                                                                                       |
+
+**3\. Components**
 ------------------
 
 | Component                 | What It Is                     | What It Does                                                               | Why It Is Needed                              |
@@ -22,7 +44,7 @@
 | **airflow-cli**           | Airflow command-line container | Lets you run `airflow X` commands inside the environment                   | Useful for debugging & manual operations      |
 | **flower**                | Web UI for Celery              | Shows queue status, worker activity, and task execution                    | Helps monitor Celery worker performance       |
 
-**2\. Environment Variables**
+**4\. Environment Variables**
 -----------------------------
 
 | ENV Var                                           | Meaning                                       |
